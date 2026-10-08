@@ -4,8 +4,7 @@ import lwjglutils.OGLBuffers;
 import lwjglutils.OGLTexture2D;
 import lwjglutils.ShaderUtils;
 import org.lwjgl.glfw.GLFWKeyCallback;
-import transforms.Mat4;
-import transforms.Mat4RotZ;
+import transforms.*;
 
 import java.io.IOException;
 
@@ -23,44 +22,64 @@ public class Renderer extends AbstractRenderer {
 
     private float rotZ = 0;
 
+    private Camera camera;
+    private Mat4PerspRH proj;
+
     public void init() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 
-        // Textures
+        // ======== Kamera a projekce ========
+        {
+        camera = new Camera()
+                .withPosition(new Vec3D(0.1, -1.5f, 1))
+                .withAzimuth(Math.toRadians(90))
+                .withZenith(Math.toRadians(-25))
+                .withFirstPerson(true);
+
+        proj = new Mat4PerspRH(Math.toRadians(90), height / (double)width, 0.1, 100);
+        }
+
+        // ======== Textury ========
         try {
             texture = new OGLTexture2D("./textures/wood.png");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
-        // vb
-        float[] vb = {
-        // 1. vrchol
-           0f,  1f, 1,     1, 0, 0,     0.5f, 1,
-        // 2. vrchol
-          -1f,  0f, 1,     0, 1, 0,     0, 0.5f,
-        // 3. vrchol
-           1f, -1f, 1,     0, 0, 1,     1, 0
-        };
+        // ======== Quad ========
+        {
+            // vb
+            float[] vb = {
+                    -1f, -1f, 0, 1, 0, 0, 0, 0, 0, 0, 1,
+                    1f, -1f, 0, 0, 1, 0, 1, 0, 0, 0, 1,
+                    1f, 1f, 0, 0, 0, 1, 1, 1, 0, 0, 1,
+                    -1f, 1f, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+            };
 
-        // ib
-        int[] ib = {0, 1, 2};
+            // ib
+            int[] ib = {
+                    0, 1, 2,
+                    3, 0, 2
+            };
 
-        // popsat grafice, co je to za data
-        OGLBuffers.Attrib[] attribs = {
-          new OGLBuffers.Attrib("inPosition", 3),
-          new OGLBuffers.Attrib("inColor", 3),
-          new OGLBuffers.Attrib("inTexCoord", 2)
-        };
+            // popsat grafice, co je to za data
+            OGLBuffers.Attrib[] attribs = {
+                    new OGLBuffers.Attrib("inPosition", 3),
+                    new OGLBuffers.Attrib("inColor", 3),
+                    new OGLBuffers.Attrib("inTexCoord", 2),
+                    new OGLBuffers.Attrib("inNormal", 3)
+            };
 
-        // dát do dohromady
-        buffers = new OGLBuffers(vb, attribs, ib);
+            // dát do dohromady
+            buffers = new OGLBuffers(vb, attribs, ib);
+        }
 
-        // shaderový program
+        // ======== Shaderové programy ========
         shaderProgram = ShaderUtils.loadProgram("/triangle");
 
+        // Tady říkáme, že chceme použít konkrétní shaderový program
         glUseProgram(shaderProgram);
-
+        // Textury je nutné bindovat
         texture.bind(shaderProgram, "textureWood");
     }
 
@@ -68,11 +87,18 @@ public class Renderer extends AbstractRenderer {
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        rotZ += 0.001f;
+//        rotZ += 0.001f;
 
-        int locUModel = glGetUniformLocation(shaderProgram, "uModel");
+        // Modelovací matice - posíláme do shaderu jako uniform
         Mat4 model = new Mat4RotZ(Math.toDegrees(rotZ));
+        int locUModel = glGetUniformLocation(shaderProgram, "uModel");
         glUniformMatrix4fv(locUModel, false, model.floatArray());
+        // View matice - posíláme do shaderu jako uniform
+        int locUView = glGetUniformLocation(shaderProgram, "uView");
+        glUniformMatrix4fv(locUView, false, camera.getViewMatrix().floatArray());
+        // Proj matice - posíláme do shaderu jako uniform
+        int locUProj = glGetUniformLocation(shaderProgram, "uProj");
+        glUniformMatrix4fv(locUProj, false, proj.floatArray());
 
         // vykreslit
         buffers.draw(GL_TRIANGLES, shaderProgram);
