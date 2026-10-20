@@ -1,42 +1,46 @@
 package app;
 
+import app.objLoader.ObjLoader;
+import app.object.Axis;
+import app.object.Floor;
 import lwjglutils.OGLBuffers;
 import lwjglutils.OGLTexture2D;
 import lwjglutils.ShaderUtils;
+import org.lwjgl.glfw.GLFWCursorPosCallback;
 import org.lwjgl.glfw.GLFWKeyCallback;
+import org.lwjgl.glfw.GLFWMouseButtonCallback;
+import org.lwjgl.glfw.GLFWScrollCallback;
 import transforms.*;
 
 import java.io.IOException;
 
-import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.glfw.GLFW.GLFW_PRESS;
-import static org.lwjgl.glfw.GLFW.GLFW_RELEASE;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
 
 
 public class Renderer extends AbstractRenderer {
-    private OGLBuffers buffers;
-    private int shaderProgram;
+    private OGLBuffers buffersAxis, buffersFloor, buffersDragon;
+    private int shaderProgramPhong, shaderProgramAxis;
     private OGLTexture2D texture;
 
-    private float rotZ = 0;
-
     private Camera camera;
+    private boolean mousePressed = false;
+    private double lastX, lastY;
     private Mat4PerspRH proj;
 
     public void init() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glEnable(GL_DEPTH_TEST);
 
         // ======== Kamera a projekce ========
         {
-        camera = new Camera()
-                .withPosition(new Vec3D(0.1, -1.5f, 1))
-                .withAzimuth(Math.toRadians(90))
-                .withZenith(Math.toRadians(-25))
-                .withFirstPerson(true);
-
-        proj = new Mat4PerspRH(Math.toRadians(90), height / (double)width, 0.1, 100);
+            camera = new Camera()
+                    .withPosition(new Vec3D(0, 0, 0))
+                    .withAzimuth(Math.toRadians(135))
+                    .withZenith(Math.toRadians(-45))
+                    .withRadius(5)
+                    .withFirstPerson(false);
+            proj = new Mat4PerspRH(Math.toRadians(45), height / (double) width, 0.1f, 100f);
         }
 
         // ======== Textury ========
@@ -46,79 +50,127 @@ public class Renderer extends AbstractRenderer {
             throw new RuntimeException(e);
         }
 
-        // ======== Quad ========
-        {
-            // vb
-            float[] vb = {
-                    -1f, -1f, 0, 1, 0, 0, 0, 0, 0, 0, 1,
-                    1f, -1f, 0, 0, 1, 0, 1, 0, 0, 0, 1,
-                    1f, 1f, 0, 0, 0, 1, 1, 1, 0, 0, 1,
-                    -1f, 1f, 0, 0, 1, 0, 0, 1, 0, 0, 1,
-            };
-
-            // ib
-            int[] ib = {
-                    0, 1, 2,
-                    3, 0, 2
-            };
-
-            // popsat grafice, co je to za data
-            OGLBuffers.Attrib[] attribs = {
-                    new OGLBuffers.Attrib("inPosition", 3),
-                    new OGLBuffers.Attrib("inColor", 3),
-                    new OGLBuffers.Attrib("inTexCoord", 2),
-                    new OGLBuffers.Attrib("inNormal", 3)
-            };
-
-            // dát do dohromady
-            buffers = new OGLBuffers(vb, attribs, ib);
-        }
+        // ======== Scene objects ========
+        buffersAxis = new Axis().getBuffers();
+        buffersFloor = new Floor().getBuffers();
+        buffersDragon = ObjLoader.load("./obj/dragon.obj");
 
         // ======== Shaderové programy ========
-        shaderProgram = ShaderUtils.loadProgram("/triangle");
+        shaderProgramPhong = ShaderUtils.loadProgram("/phong");
+        shaderProgramAxis = ShaderUtils.loadProgram("/axis");
 
         // Tady říkáme, že chceme použít konkrétní shaderový program
-        glUseProgram(shaderProgram);
+        //glUseProgram(shaderProgram);
         // Textury je nutné bindovat
-        texture.bind(shaderProgram, "textureWood");
+        //texture.bind(shaderProgram, "textureWood");
     }
 
     public void display() {
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-//        rotZ += 0.001f;
+        // ======== Render Axis ========
+        {
+            glUseProgram(shaderProgramAxis);
+            setGlobalUniforms(shaderProgramAxis);
+            buffersAxis.draw(GL_LINES, shaderProgramAxis);
+        }
+
+        // ======== Render Floor ========
+        {
+            glUseProgram(shaderProgramPhong);
+            setGlobalUniforms(shaderProgramPhong);
+            int locUModel = glGetUniformLocation(shaderProgramPhong, "uModel");
+            glUniformMatrix4fv(locUModel, false, new Mat4Identity().floatArray());
+            buffersFloor.draw(GL_TRIANGLES, shaderProgramPhong);
+        }
+
+        // ======== Render Dragon ========
+        {
+            glUseProgram(shaderProgramPhong);
+            setGlobalUniforms(shaderProgramPhong);
+            int locUModel = glGetUniformLocation(shaderProgramPhong, "uModel");
+            glUniformMatrix4fv(locUModel, false, new Mat4Scale(0.05f).mul(new Mat4RotX(Math.toRadians(90))).mul(new Mat4RotZ(Math.toRadians(90))).mul(new Mat4Transl(-0.25, 0, 0)).floatArray());
+            buffersDragon.draw(GL_TRIANGLES, shaderProgramPhong);
+        }
+
 
         // Modelovací matice - posíláme do shaderu jako uniform
-        Mat4 model = new Mat4RotZ(Math.toDegrees(rotZ));
+        /*
+        Mat4 model = new Mat4Scale(0.2f).mul(new Mat4RotX(Math.toRadians(90))).mul(new Mat4Transl(0, 0, -0.5));
         int locUModel = glGetUniformLocation(shaderProgram, "uModel");
         glUniformMatrix4fv(locUModel, false, model.floatArray());
+
+         */
+
+
+        // vykreslit
+        //buffersFloor.draw(GL_TRIANGLES, shaderProgram);
+        //buffersDragon.draw(GL_TRIANGLES, shaderProgram);
+    }
+
+    private void setGlobalUniforms(int shaderProgram) {
         // View matice - posíláme do shaderu jako uniform
         int locUView = glGetUniformLocation(shaderProgram, "uView");
         glUniformMatrix4fv(locUView, false, camera.getViewMatrix().floatArray());
         // Proj matice - posíláme do shaderu jako uniform
         int locUProj = glGetUniformLocation(shaderProgram, "uProj");
         glUniformMatrix4fv(locUProj, false, proj.floatArray());
-
-        // vykreslit
-        buffers.draw(GL_TRIANGLES, shaderProgram);
     }
 
-
-
-    protected GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
+    // ====== Callbacks ======
+    private GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
         @Override
         public void invoke(long window, int key, int scancode, int action, int mods) {
-            if (action == GLFW_PRESS && key == GLFW_KEY_L){
-                int locUColor = glGetUniformLocation(shaderProgram, "uColor");
-                glUniform3f(locUColor, 0, 0, 1);
+        }
+    };
+
+    private GLFWMouseButtonCallback mbCallback = new GLFWMouseButtonCallback() {
+        @Override
+        public void invoke(long window, int button, int action, int mods) {
+            if (button == 0) {
+                mousePressed = action == 1;
             }
+        }
+    };
+
+    private GLFWCursorPosCallback cpCallbacknew = new GLFWCursorPosCallback() {
+        @Override
+        public void invoke(long window, double x, double y) {
+            if (mousePressed) {
+                camera = camera.addAzimuth(Math.toRadians(lastX - x) * 0.3);
+                camera = camera.addZenith(Math.toRadians(lastY - y) * 0.3);
+            }
+            lastX = x;
+            lastY = y;
+        }
+    };
+
+    private GLFWScrollCallback scrollCallback = new GLFWScrollCallback() {
+        @Override
+        public void invoke(long window, double dx, double dy) {
+            camera = camera.mulRadius(Math.pow(0.8, dy));
         }
     };
 
     @Override
     public GLFWKeyCallback getKeyCallback() {
         return keyCallback;
+    }
+
+    @Override
+    public GLFWMouseButtonCallback getMouseCallback() {
+        return mbCallback;
+    }
+
+    @Override
+    public GLFWCursorPosCallback getCursorCallback() {
+        return cpCallbacknew;
+    }
+
+    @Override
+    public GLFWScrollCallback getScrollCallback() {
+        return scrollCallback;
     }
 
 

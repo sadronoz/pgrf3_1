@@ -29,5 +29,5 @@ void main() {
 
     // Výsledná barva - baseColor * phong
     outColor = vec4(baseColor * (ambientColor + (diffuseColor * nDotL)), 1);
-    //outColor = vec4(ld, 1);
+    //outColor = vec4(nd, 1);
 }

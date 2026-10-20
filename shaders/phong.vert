@@ -22,8 +22,9 @@ void main() {
     vertColor = inColor;
     vertPosition = inPosition;
     vertTexCoord = inTexCoord;
+
     // Normála - pozor je nutné převést do stejného ss jako máme lightPos, pos apod. Matice musí být inverzní a transponovaná.
-    vertNormal = inNormal;
+    vertNormal = transpose(inverse(mat3(uModel))) * inNormal;
 
     // Pozice světla. Nyní pevná bez možnosti měnit pozici.
     vec4 lightPosition = vec4(0.5, 0, 0.1, 1);
