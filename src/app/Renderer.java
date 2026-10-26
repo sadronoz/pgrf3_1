@@ -21,7 +21,7 @@ import static org.lwjgl.opengl.GL20.*;
 public class Renderer extends AbstractRenderer {
     private OGLBuffers buffersAxis, buffersFloor, buffersDragon;
     private int shaderProgramPhong, shaderProgramAxis;
-    private OGLTexture2D texture;
+    private OGLTexture2D textureColor, textureNormal;
 
     private Camera camera;
     private boolean mousePressed = false;
@@ -45,7 +45,10 @@ public class Renderer extends AbstractRenderer {
 
         // ======== Textury ========
         try {
-            texture = new OGLTexture2D("./textures/wood.png");
+            textureColor = new OGLTexture2D("./textures/brickwall.jpg");
+            textureNormal = new OGLTexture2D("./textures/brickwall_normal.jpg");
+//            textureColor = new OGLTexture2D("./textures/bricksa.jpg");
+//            textureNormal = new OGLTexture2D("./textures/bricksn.png");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -81,18 +84,21 @@ public class Renderer extends AbstractRenderer {
             glUseProgram(shaderProgramPhong);
             setGlobalUniforms(shaderProgramPhong);
             int locUModel = glGetUniformLocation(shaderProgramPhong, "uModel");
-            glUniformMatrix4fv(locUModel, false, new Mat4Identity().floatArray());
+//            glUniformMatrix4fv(locUModel, false, new Mat4Identity().floatArray());
+            glUniformMatrix4fv(locUModel, false, new Mat4RotY(Math.toRadians(90)).floatArray());
+            textureColor.bind(shaderProgramPhong, "textureColor", 0);
+            textureNormal.bind(shaderProgramPhong, "textureNormal", 1);
             buffersFloor.draw(GL_TRIANGLES, shaderProgramPhong);
         }
 
         // ======== Render Dragon ========
-        {
-            glUseProgram(shaderProgramPhong);
-            setGlobalUniforms(shaderProgramPhong);
-            int locUModel = glGetUniformLocation(shaderProgramPhong, "uModel");
-            glUniformMatrix4fv(locUModel, false, new Mat4Scale(0.05f).mul(new Mat4RotX(Math.toRadians(90))).mul(new Mat4RotZ(Math.toRadians(90))).mul(new Mat4Transl(-0.25, 0, 0)).floatArray());
-            buffersDragon.draw(GL_TRIANGLES, shaderProgramPhong);
-        }
+//        {
+//            glUseProgram(shaderProgramPhong);
+//            setGlobalUniforms(shaderProgramPhong);
+//            int locUModel = glGetUniformLocation(shaderProgramPhong, "uModel");
+//            glUniformMatrix4fv(locUModel, false, new Mat4Scale(0.05f).mul(new Mat4RotX(Math.toRadians(90))).mul(new Mat4RotZ(Math.toRadians(90))).mul(new Mat4Transl(-0.25, 0, 0)).floatArray());
+//            buffersDragon.draw(GL_TRIANGLES, shaderProgramPhong);
+//        }
 
 
         // Modelovací matice - posíláme do shaderu jako uniform

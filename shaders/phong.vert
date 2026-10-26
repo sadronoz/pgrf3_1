@@ -27,7 +27,7 @@ void main() {
     vertNormal = transpose(inverse(mat3(uModel))) * inNormal;
 
     // Pozice světla. Nyní pevná bez možnosti měnit pozici.
-    vec4 lightPosition = vec4(0.5, 0, 0.1, 1);
+    vec4 lightPosition = vec4(1, 0, 0.2, 1);
     // Pozice vrcholu v souřadnicích světa
     vec4 posWorldSpace = uModel * vec4(inPosition, 1);
     // Výpočet vektoru ke světlu (v souřadnicích světa)
