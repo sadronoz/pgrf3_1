@@ -108,6 +108,8 @@ public class ObjLoader {
             vb[index++] = (float)v.getNormal().getX();
             vb[index++] = (float)v.getNormal().getY();
             vb[index++] = (float)v.getNormal().getZ();
+
+            // TODO: spočítat tangentu
         }
 
 
@@ -115,6 +117,7 @@ public class ObjLoader {
                 new OGLBuffers.Attrib("inPosition", 3),
                 new OGLBuffers.Attrib("inTexCoord", 2),
                 new OGLBuffers.Attrib("inNormal", 3)
+                // TODO: přidat inTangent
         };
 
 

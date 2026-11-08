@@ -2,8 +2,9 @@ package app;
 
 import app.objLoader.ObjLoader;
 import app.object.Axis;
-import app.object.Floor;
+import app.object.Quad;
 import lwjglutils.OGLBuffers;
+import lwjglutils.OGLRenderTarget;
 import lwjglutils.OGLTexture2D;
 import lwjglutils.ShaderUtils;
 import org.lwjgl.glfw.GLFWCursorPosCallback;
@@ -16,6 +17,8 @@ import java.io.IOException;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER;
+import static org.lwjgl.opengl.GL30.glBindFramebuffer;
 
 
 public class Renderer extends AbstractRenderer {
@@ -30,7 +33,7 @@ public class Renderer extends AbstractRenderer {
 
     public void init() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glEnable(GL_DEPTH_TEST);
+
 
         // ======== Kamera a projekce ========
         {
@@ -55,7 +58,7 @@ public class Renderer extends AbstractRenderer {
 
         // ======== Scene objects ========
         buffersAxis = new Axis().getBuffers();
-        buffersFloor = new Floor().getBuffers();
+        buffersFloor = new Quad().getBuffers();
         buffersDragon = ObjLoader.load("./obj/dragon.obj");
 
         // ======== Shaderové programy ========
@@ -69,6 +72,7 @@ public class Renderer extends AbstractRenderer {
     }
 
     public void display() {
+        glEnable(GL_DEPTH_TEST);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -114,6 +118,7 @@ public class Renderer extends AbstractRenderer {
         //buffersFloor.draw(GL_TRIANGLES, shaderProgram);
         //buffersDragon.draw(GL_TRIANGLES, shaderProgram);
     }
+
 
     private void setGlobalUniforms(int shaderProgram) {
         // View matice - posíláme do shaderu jako uniform

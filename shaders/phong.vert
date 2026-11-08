@@ -5,6 +5,7 @@ in vec3 inPosition;
 in vec3 inColor;
 in vec2 inTexCoord;
 in vec3 inNormal;
+// TODO: inTangent
 
 // Uniform proměnné
 uniform mat4 uModel;
@@ -23,6 +24,9 @@ void main() {
     vertPosition = inPosition;
     vertTexCoord = inTexCoord;
 
+    // TODO: spočítat binormal - cross(normal, tangenta)
+    // TODO: vytvořit TBN matici
+
     // Normála - pozor je nutné převést do stejného ss jako máme lightPos, pos apod. Matice musí být inverzní a transponovaná.
     vertNormal = transpose(inverse(mat3(uModel))) * inNormal;
 
@@ -32,6 +36,8 @@ void main() {
     vec4 posWorldSpace = uModel * vec4(inPosition, 1);
     // Výpočet vektoru ke světlu (v souřadnicích světa)
     lightDirection = lightPosition.xyz - posWorldSpace.xyz;
+
+    // TODO: lightVector a viewVector násobit TBN maticí zprava
 
     gl_Position = uProj * uView * posWorldSpace;
 }

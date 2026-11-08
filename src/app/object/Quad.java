@@ -2,8 +2,8 @@ package app.object;
 
 import lwjglutils.OGLBuffers;
 
-public class Floor extends SceneObject {
-    public Floor() {
+public class Quad extends SceneObject {
+    public Quad() {
         // vb
         float[] vb = {
                 -1f, -1f, -0.1f, 1, 0, 0, 0, 0, 0, 0, 1,

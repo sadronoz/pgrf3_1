@@ -21,7 +21,7 @@ void main() {
     // Základní barva pixelu
 //    vec3 baseColor = vec3(0.5, 0.5, 0.5);
     vec3 baseColor = texture(textureColor, vertTexCoord).rgb;
-    vec3 normal = texture(textureNormal, vertTexCoord).rgb;
+    vec3 normal = texture(textureNormal, vertTexCoord).rgb; // je v tanget space
 
     // Barvy jednotlivých složek
     vec3 ambientColor = vec3(0.5, 0.5, 0.5);
@@ -37,6 +37,6 @@ void main() {
     // Výsledná barva - baseColor * phong
     outColor = vec4(baseColor * (ambientColor + (diffuseColor * nDotL)), 1);
     //outColor = vec4(baseColor, 1);
-    outColor = vec4(nd, 1);
+//    outColor = vec4(nd, 1);
 //    outColor = vec4(normal, 1);
 }
