@@ -1,43 +1,39 @@
 #version 430
 
-// Atributy vrcholu (vstup do shaderu)
 in vec3 inPosition;
 in vec3 inColor;
 in vec2 inTexCoord;
 in vec3 inNormal;
-// TODO: inTangent
 
-// Uniform proměnné
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProj;
+uniform vec3 uLightPos;   // pozice světla ve world space
 
-// Výstup ze shaderu - přechází do fragment shaderu jako interpolovaná hodnota
 out vec3 vertColor;
 out vec3 vertPosition;
 out vec2 vertTexCoord;
-out vec3 vertNormal;
-out vec3 lightDirection;
+out vec3 vertNormal;      // world space
+out vec3 vertLightDir;    // world space: světlo - fragment
+out vec3 vertViewDir;     // world space: kamera - fragment
 
 void main() {
-    vertColor = inColor;
+    vertColor    = inColor;
     vertPosition = inPosition;
     vertTexCoord = inTexCoord;
 
-    // TODO: spočítat binormal - cross(normal, tangenta)
-    // TODO: vytvořit TBN matici
+    // Normála do world space
+    vertNormal = normalize(transpose(inverse(mat3(uModel))) * inNormal);
 
-    // Normála - pozor je nutné převést do stejného ss jako máme lightPos, pos apod. Matice musí být inverzní a transponovaná.
-    vertNormal = transpose(inverse(mat3(uModel))) * inNormal;
+    vec4 posWorld = uModel * vec4(inPosition, 1.0);
 
-    // Pozice světla. Nyní pevná bez možnosti měnit pozici.
-    vec4 lightPosition = vec4(1, 0, 0.2, 1);
-    // Pozice vrcholu v souřadnicích světa
-    vec4 posWorldSpace = uModel * vec4(inPosition, 1);
-    // Výpočet vektoru ke světlu (v souřadnicích světa)
-    lightDirection = lightPosition.xyz - posWorldSpace.xyz;
+    // Vektor ke světlu
+    vertLightDir = uLightPos - posWorld.xyz;
 
-    // TODO: lightVector a viewVector násobit TBN maticí zprava
+    // Vektor ke kameře (eye = pozice kamery ve world space)
+    // Eye pozici rekonstruujeme z view matice: eye = -R^T * t
+    vec3 eyePos = -(mat3(uView[0].xyz, uView[1].xyz, uView[2].xyz)) * vec3(uView[3]);
+    vertViewDir = eyePos - posWorld.xyz;
 
-    gl_Position = uProj * uView * posWorldSpace;
+    gl_Position = uProj * uView * posWorld;
 }

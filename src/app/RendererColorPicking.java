@@ -29,7 +29,7 @@ import static org.lwjgl.opengl.GL30C.glBindFramebuffer;
 public class RendererColorPicking extends AbstractRenderer {
 
     // ======== Shadery ========
-    private int shaderProgramPhong, shaderProgramAxis, shaderProgramColorPicking;
+    private int shaderProgramPhong, shaderProgramAxis, shaderProgramColorPicking, shaderProgramDebug;
 
     // ======== Scéna ========
     private Axis axisObject;
@@ -46,7 +46,7 @@ public class RendererColorPicking extends AbstractRenderer {
     private OGLRenderTarget renderTarget;
     private OGLTexture2D.Viewer viewer;
 
-    // ======== Klávesy – plynulý pohyb ========
+    // ======== Klávesy ========
     private final Set<Integer> pressedKeys = new HashSet<>();
     private static final double MOVE_SPEED  = 0.05;
     private static final double TRANS_STEP  = 0.05;
@@ -55,6 +55,26 @@ public class RendererColorPicking extends AbstractRenderer {
 
     private enum TransformAxis { X, Y, Z }
     private TransformAxis activeAxis = TransformAxis.X;
+
+    // ======== Debug mód ========
+    // 0=texture, 1=pos object, 2=pos world, 3=pos view, 4=depth, 5=normal, 6=UV, 7=light dist, 8=normal map
+    private static final int DEBUG_MODE_COUNT = 9;
+    private static final String[] DEBUG_MODE_NAMES = {
+        "Textura (bez osvětlení)",
+        "Pozice – object space",
+        "Pozice – world space",
+        "Pozice – view space",
+        "Hloubka (depth)",
+        "Normála – world space",
+        "UV souřadnice",
+        "Vzdálenost od světla",
+        "Normal mapa (raw)"
+    };
+    private int debugMode = -1; // -1 = Phong (normální render), 0–8 = debug mód
+
+    // ======== Zdroj světla ========
+    private Vec3D lightPos = new Vec3D(2.0, 2.0, 2.0);
+    private static final double LIGHT_STEP = 0.1;
 
     @Override
     public void init() {
@@ -82,14 +102,14 @@ public class RendererColorPicking extends AbstractRenderer {
             throw new RuntimeException(e);
         }
 
-        // ======== Osy (nelze vybrat) ========
+        // ======== Osy ========
         axisObject = new Axis();
 
         // ======== Floor (Quad) – ID 1 ========
         SceneObject floor = new Quad(1);
         floor.setTextureColor(texBrickColor);
         floor.setTextureNormal(texBrickNormal);
-        floor.rotate(Math.toRadians(-90), 0, 0); // Quad leží ve XY, pootočíme do XZ
+        floor.rotate(Math.toRadians(-90), 0, 0);
         floor.translate(0, -0.5, 0);
         sceneObjects.add(floor);
 
@@ -113,11 +133,14 @@ public class RendererColorPicking extends AbstractRenderer {
         shaderProgramPhong        = ShaderUtils.loadProgram("/phong");
         shaderProgramAxis         = ShaderUtils.loadProgram("/axis");
         shaderProgramColorPicking = ShaderUtils.loadProgram("/colorPicking");
+        shaderProgramDebug        = ShaderUtils.loadProgram("/debug");
+
+        printHelp();
     }
 
     @Override
     public void display() {
-        // WASD pohyb kamery každý frame
+        // WASD pohyb kamery
         if (pressedKeys.contains(GLFW_KEY_W)) camera = camera.forward(MOVE_SPEED);
         if (pressedKeys.contains(GLFW_KEY_S)) camera = camera.backward(MOVE_SPEED);
         if (pressedKeys.contains(GLFW_KEY_A)) camera = camera.left(MOVE_SPEED);
@@ -125,23 +148,30 @@ public class RendererColorPicking extends AbstractRenderer {
 
         glEnable(GL_DEPTH_TEST);
 
-        // 1. průchod: color picking do FBO (bez os)
+        // 1. průchod: color picking do FBO (vždy, bez ohledu na debug mód)
         renderTarget.bind();
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         renderPickingPass();
 
-        // 2. průchod: finální render (Phong + osy)
+        // 2. průchod: finální render
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        renderMainPass();
 
-        // Náhled picking textury v levém dolním rohu
+        if (debugMode >= 0) {
+            renderDebugPass();
+        } else {
+            renderMainPass();
+        }
+
+        // Náhled picking textury (levý dolní roh)
         glDisable(GL_DEPTH_TEST);
         viewer.view(renderTarget.getColorTexture(), -1, -1, 0.5);
     }
 
+    // ================================================================
+    // Picking průchod – jen objekty scény, osy se nekresli
     // ================================================================
     private void renderPickingPass() {
         glUseProgram(shaderProgramColorPicking);
@@ -152,12 +182,13 @@ public class RendererColorPicking extends AbstractRenderer {
                     glGetUniformLocation(shaderProgramColorPicking, "uModel"),
                     false, obj.getModelMatrix().floatArray());
             float[] c = obj.getPickingColor();
-            glUniform3f(glGetUniformLocation(shaderProgramColorPicking, "uColor"),
-                    c[0], c[1], c[2]);
+            glUniform3f(glGetUniformLocation(shaderProgramColorPicking, "uColor"), c[0], c[1], c[2]);
             obj.getBuffers().draw(GL_TRIANGLES, shaderProgramColorPicking);
         }
     }
 
+    // ================================================================
+    // Hlavní průchod – Phong + highlight
     // ================================================================
     private void renderMainPass() {
         // Osy
@@ -165,30 +196,59 @@ public class RendererColorPicking extends AbstractRenderer {
         setGlobalUniforms(shaderProgramAxis);
         axisObject.getBuffers().draw(GL_LINES, shaderProgramAxis);
 
-        // Objekty scény
+        // Objekty
         glUseProgram(shaderProgramPhong);
         setGlobalUniforms(shaderProgramPhong);
+        glUniform3f(glGetUniformLocation(shaderProgramPhong, "uLightPos"),
+                (float) lightPos.getX(), (float) lightPos.getY(), (float) lightPos.getZ());
 
         for (SceneObject obj : sceneObjects) {
             glUniformMatrix4fv(
                     glGetUniformLocation(shaderProgramPhong, "uModel"),
                     false, obj.getModelMatrix().floatArray());
 
-            // Highlight: vybraný objekt = žlutý tint
             if (obj.isSelected()) {
                 glUniform3f(glGetUniformLocation(shaderProgramPhong, "uColor"), 1.0f, 1.0f, 0.0f);
             } else {
                 glUniform3f(glGetUniformLocation(shaderProgramPhong, "uColor"), 0.5f, 0.5f, 0.5f);
             }
 
-            if (obj.getTextureColor()  != null) obj.getTextureColor().bind(shaderProgramPhong, "textureColor", 0);
-            if (obj.getTextureNormal() != null) obj.getTextureNormal().bind(shaderProgramPhong, "textureNormal", 1);
-
+            bindTextures(shaderProgramPhong, obj);
             obj.getBuffers().draw(GL_TRIANGLES, shaderProgramPhong);
         }
     }
 
     // ================================================================
+    // Debug průchod – všechny objekty debug shaderem, osy normálně
+    // ================================================================
+    private void renderDebugPass() {
+        // Osy vždy normálním shaderem
+        glUseProgram(shaderProgramAxis);
+        setGlobalUniforms(shaderProgramAxis);
+        axisObject.getBuffers().draw(GL_LINES, shaderProgramAxis);
+
+        // Objekty debug shaderem
+        glUseProgram(shaderProgramDebug);
+        setGlobalUniforms(shaderProgramDebug);
+        glUniform3f(glGetUniformLocation(shaderProgramDebug, "uLightPos"),
+                (float) lightPos.getX(), (float) lightPos.getY(), (float) lightPos.getZ());
+        glUniform1i(glGetUniformLocation(shaderProgramDebug, "uDebugMode"), debugMode);
+
+        for (SceneObject obj : sceneObjects) {
+            glUniformMatrix4fv(
+                    glGetUniformLocation(shaderProgramDebug, "uModel"),
+                    false, obj.getModelMatrix().floatArray());
+            bindTextures(shaderProgramDebug, obj);
+            obj.getBuffers().draw(GL_TRIANGLES, shaderProgramDebug);
+        }
+    }
+
+    // ================================================================
+    private void bindTextures(int prog, SceneObject obj) {
+        if (obj.getTextureColor()  != null) obj.getTextureColor().bind(prog, "textureColor", 0);
+        if (obj.getTextureNormal() != null) obj.getTextureNormal().bind(prog, "textureNormal", 1);
+    }
+
     private void setGlobalUniforms(int prog) {
         glUniformMatrix4fv(glGetUniformLocation(prog, "uView"), false, camera.getViewMatrix().floatArray());
         glUniformMatrix4fv(glGetUniformLocation(prog, "uProj"), false, proj.floatArray());
@@ -196,12 +256,13 @@ public class RendererColorPicking extends AbstractRenderer {
 
     private SceneObject findObjectById(int id) {
         if (id == 0) return null;
-        for (SceneObject obj : sceneObjects) {
+        for (SceneObject obj : sceneObjects)
             if (obj.getId() == id) return obj;
-        }
         return null;
     }
 
+    // ================================================================
+    // Transformace aktivního objektu
     // ================================================================
     private void applyTranslation(double delta) {
         if (selectedObject == null) return;
@@ -226,6 +287,25 @@ public class RendererColorPicking extends AbstractRenderer {
         selectedObject.scaleBy(factor);
     }
 
+    private void printHelp() {
+        System.out.println("=== OVLÁDÁNÍ ===");
+        System.out.println("WASD          - pohyb kamery");
+        System.out.println("Myš + drag    - rozhlížení");
+        System.out.println("Scroll        - zoom");
+        System.out.println("Levý klik     - vybrat objekt (color picking)");
+        System.out.println("Tab           - přepnout výběr na další objekt");
+        System.out.println("Escape        - zrušit výběr / zavřít");
+        System.out.println("1/2/3         - aktivní osa X/Y/Z");
+        System.out.println("I/K           - translace +/-");
+        System.out.println("U/O           - rotace +/-");
+        System.out.println("+/-           - scale +/-");
+        System.out.println("F             - přepnout debug mód (cyklicky)");
+        System.out.println("J/L           - posun světla X +/-");
+        System.out.println("Y/H           - posun světla Y +/-");
+        System.out.println("N/M           - posun světla Z +/-");
+        System.out.println("================");
+    }
+
     // ================================================================
     // Callbacks
     // ================================================================
@@ -233,7 +313,6 @@ public class RendererColorPicking extends AbstractRenderer {
     private final GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
         @Override
         public void invoke(long window, int key, int scancode, int action, int mods) {
-            // ESC: zavřít okno (pokud nic nevybráno), jinak zrušit výběr
             if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
                 if (selectedObject != null) {
                     selectedObject.setSelected(false);
@@ -248,12 +327,12 @@ public class RendererColorPicking extends AbstractRenderer {
             if (action == GLFW_RELEASE) pressedKeys.remove(key);
 
             if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-                // Výběr osy transformace
+                // --- Osa transformace ---
                 if (key == GLFW_KEY_1) { activeAxis = TransformAxis.X; System.out.println("Osa: X"); }
                 if (key == GLFW_KEY_2) { activeAxis = TransformAxis.Y; System.out.println("Osa: Y"); }
                 if (key == GLFW_KEY_3) { activeAxis = TransformAxis.Z; System.out.println("Osa: Z"); }
 
-                // Tab = přepnout na další objekt
+                // --- Tab: přepnout objekt ---
                 if (key == GLFW_KEY_TAB && action == GLFW_PRESS) {
                     if (sceneObjects.isEmpty()) return;
                     if (selectedObject != null) selectedObject.setSelected(false);
@@ -261,20 +340,37 @@ public class RendererColorPicking extends AbstractRenderer {
                             : (sceneObjects.indexOf(selectedObject) + 1) % sceneObjects.size();
                     selectedObject = sceneObjects.get(idx);
                     selectedObject.setSelected(true);
-                    System.out.println("Vybrán objekt ID=" + selectedObject.getId());
+                    System.out.println("Vybrán: ID=" + selectedObject.getId());
                 }
 
-                // Translace: I / K
+                // --- Translace ---
                 if (key == GLFW_KEY_I) applyTranslation( TRANS_STEP);
                 if (key == GLFW_KEY_K) applyTranslation(-TRANS_STEP);
 
-                // Rotace: U / O
+                // --- Rotace ---
                 if (key == GLFW_KEY_U) applyRotation( ROT_STEP);
                 if (key == GLFW_KEY_O) applyRotation(-ROT_STEP);
 
-                // Scale: numpad +/- nebo řadová +/-
+                // --- Scale ---
                 if (key == GLFW_KEY_KP_ADD     || key == GLFW_KEY_EQUAL) applyScale(SCALE_STEP);
                 if (key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) applyScale(1.0 / SCALE_STEP);
+
+                // --- Debug mód (F = cyklicky) ---
+                if (key == GLFW_KEY_F && action == GLFW_PRESS) {
+                    debugMode = (debugMode + 1 < DEBUG_MODE_COUNT) ? debugMode + 1 : -1;
+                    if (debugMode < 0)
+                        System.out.println("Debug mód: Phong (normální)");
+                    else
+                        System.out.println("Debug mód " + debugMode + ": " + DEBUG_MODE_NAMES[debugMode]);
+                }
+
+                // --- Pohyb světla ---
+                if (key == GLFW_KEY_J) lightPos = lightPos.add(new Vec3D( LIGHT_STEP, 0, 0));
+                if (key == GLFW_KEY_L) lightPos = lightPos.add(new Vec3D(-LIGHT_STEP, 0, 0));
+                if (key == GLFW_KEY_Y) lightPos = lightPos.add(new Vec3D(0,  LIGHT_STEP, 0));
+                if (key == GLFW_KEY_H) lightPos = lightPos.add(new Vec3D(0, -LIGHT_STEP, 0));
+                if (key == GLFW_KEY_N) lightPos = lightPos.add(new Vec3D(0, 0,  LIGHT_STEP));
+                if (key == GLFW_KEY_M) lightPos = lightPos.add(new Vec3D(0, 0, -LIGHT_STEP));
             }
         }
     };
@@ -285,7 +381,6 @@ public class RendererColorPicking extends AbstractRenderer {
             if (button == GLFW_MOUSE_BUTTON_LEFT)
                 mousePressed = action == GLFW_PRESS;
 
-            // Color picking kliknutím levým tlačítkem
             if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
                 DoubleBuffer xBuf = BufferUtils.createDoubleBuffer(1);
                 DoubleBuffer yBuf = BufferUtils.createDoubleBuffer(1);
