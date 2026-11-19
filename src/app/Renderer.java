@@ -34,7 +34,6 @@ public class Renderer extends AbstractRenderer {
     public void init() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 
-
         // ======== Kamera a projekce ========
         {
             camera = new Camera()
@@ -50,25 +49,18 @@ public class Renderer extends AbstractRenderer {
         try {
             textureColor = new OGLTexture2D("./textures/brickwall.jpg");
             textureNormal = new OGLTexture2D("./textures/brickwall_normal.jpg");
-//            textureColor = new OGLTexture2D("./textures/bricksa.jpg");
-//            textureNormal = new OGLTexture2D("./textures/bricksn.png");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         // ======== Scene objects ========
         buffersAxis = new Axis().getBuffers();
-        buffersFloor = new Quad().getBuffers();
+        buffersFloor = new Quad(1).getBuffers(); // ID 1
         buffersDragon = ObjLoader.load("./obj/dragon.obj");
 
         // ======== Shaderové programy ========
         shaderProgramPhong = ShaderUtils.loadProgram("/phong");
         shaderProgramAxis = ShaderUtils.loadProgram("/axis");
-
-        // Tady říkáme, že chceme použít konkrétní shaderový program
-        //glUseProgram(shaderProgram);
-        // Textury je nutné bindovat
-        //texture.bind(shaderProgram, "textureWood");
     }
 
     public void display() {
@@ -88,43 +80,17 @@ public class Renderer extends AbstractRenderer {
             glUseProgram(shaderProgramPhong);
             setGlobalUniforms(shaderProgramPhong);
             int locUModel = glGetUniformLocation(shaderProgramPhong, "uModel");
-//            glUniformMatrix4fv(locUModel, false, new Mat4Identity().floatArray());
             glUniformMatrix4fv(locUModel, false, new Mat4RotY(Math.toRadians(90)).floatArray());
             textureColor.bind(shaderProgramPhong, "textureColor", 0);
             textureNormal.bind(shaderProgramPhong, "textureNormal", 1);
             buffersFloor.draw(GL_TRIANGLES, shaderProgramPhong);
         }
-
-        // ======== Render Dragon ========
-//        {
-//            glUseProgram(shaderProgramPhong);
-//            setGlobalUniforms(shaderProgramPhong);
-//            int locUModel = glGetUniformLocation(shaderProgramPhong, "uModel");
-//            glUniformMatrix4fv(locUModel, false, new Mat4Scale(0.05f).mul(new Mat4RotX(Math.toRadians(90))).mul(new Mat4RotZ(Math.toRadians(90))).mul(new Mat4Transl(-0.25, 0, 0)).floatArray());
-//            buffersDragon.draw(GL_TRIANGLES, shaderProgramPhong);
-//        }
-
-
-        // Modelovací matice - posíláme do shaderu jako uniform
-        /*
-        Mat4 model = new Mat4Scale(0.2f).mul(new Mat4RotX(Math.toRadians(90))).mul(new Mat4Transl(0, 0, -0.5));
-        int locUModel = glGetUniformLocation(shaderProgram, "uModel");
-        glUniformMatrix4fv(locUModel, false, model.floatArray());
-
-         */
-
-
-        // vykreslit
-        //buffersFloor.draw(GL_TRIANGLES, shaderProgram);
-        //buffersDragon.draw(GL_TRIANGLES, shaderProgram);
     }
 
 
     private void setGlobalUniforms(int shaderProgram) {
-        // View matice - posíláme do shaderu jako uniform
         int locUView = glGetUniformLocation(shaderProgram, "uView");
         glUniformMatrix4fv(locUView, false, camera.getViewMatrix().floatArray());
-        // Proj matice - posíláme do shaderu jako uniform
         int locUProj = glGetUniformLocation(shaderProgram, "uProj");
         glUniformMatrix4fv(locUProj, false, proj.floatArray());
     }
@@ -183,6 +149,4 @@ public class Renderer extends AbstractRenderer {
     public GLFWScrollCallback getScrollCallback() {
         return scrollCallback;
     }
-
-
 }
