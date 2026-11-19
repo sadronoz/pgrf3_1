@@ -59,8 +59,9 @@ public class RendererColorPicking extends AbstractRenderer {
     private TransformAxis activeAxis = TransformAxis.X;
 
     // ======== Debug mód ========
-    // 0=texture, 1=pos object, 2=pos world, 3=pos view, 4=depth, 5=normal, 6=UV, 7=light dist, 8=normal map
-    private static final int DEBUG_MODE_COUNT = 9;
+    // 0=texture, 1=pos object, 2=pos world, 3=pos view, 4=depth, 5=normal,
+    // 6=UV, 7=light dist, 8=normal map RGB, 9=tangent, 10=bitangent, 11=mapped normal
+    private static final int DEBUG_MODE_COUNT = 12;
     private static final String[] DEBUG_MODE_NAMES = {
         "Textura (bez osvětlení)",
         "Pozice – object space",
@@ -70,7 +71,10 @@ public class RendererColorPicking extends AbstractRenderer {
         "Normála – world space",
         "UV souřadnice",
         "Vzdálenost od světla",
-        "Normal mapa (raw)"
+        "Normal mapa (raw)",
+        "Tangenta – world space",
+        "Bitangenta – world space",
+        "Normála po normal mappingu – world space"
     };
     private int debugMode = -1; // -1 = Phong (normální render), 0–8 = debug mód
 
@@ -218,6 +222,8 @@ public class RendererColorPicking extends AbstractRenderer {
             }
 
             bindTextures(shaderProgramPhong, obj);
+            glUniform1i(glGetUniformLocation(shaderProgramPhong, "uHasNormalMap"),
+                    obj.getTextureNormal() != null ? 1 : 0);
             obj.getBuffers().draw(GL_TRIANGLES, shaderProgramPhong);
         }
 
@@ -245,6 +251,8 @@ public class RendererColorPicking extends AbstractRenderer {
                     glGetUniformLocation(shaderProgramDebug, "uModel"),
                     false, obj.getModelMatrix().floatArray());
             bindTextures(shaderProgramDebug, obj);
+            glUniform1i(glGetUniformLocation(shaderProgramDebug, "uHasNormalMap"),
+                    obj.getTextureNormal() != null ? 1 : 0);
             obj.getBuffers().draw(GL_TRIANGLES, shaderProgramDebug);
         }
 

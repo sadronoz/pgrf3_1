@@ -6,10 +6,12 @@ in vec2 vertTexCoord;
 in vec3 vertNormal;
 in vec3 vertLightDir;
 in vec3 vertViewDir;
+in mat3 vertTBN;
 
 uniform sampler2D textureColor;
 uniform sampler2D textureNormal;
 uniform vec3 uColor;       // tint barva (highlight při výběru)
+uniform bool uHasNormalMap;
 
 out vec4 outColor;
 
@@ -24,8 +26,15 @@ void main() {
         baseColor = mix(baseColor, vec3(1.0, 1.0, 0.0), 0.3);
     }
 
-    // === Normála (použijeme vertex normálu, bez normal mappingu) ===
+    // === Normála ===
     vec3 N = normalize(vertNormal);
+    if (uHasNormalMap) {
+        vec3 tangentNormal = texture(textureNormal, vertTexCoord).rgb * 2.0 - 1.0;
+        vec3 T = normalize(vertTBN[0]);
+        T = normalize(T - N * dot(N, T));
+        vec3 B = normalize(cross(N, T));
+        N = normalize(mat3(T, B, N) * tangentNormal);
+    }
 
     // === Vektory ===
     vec3 L = normalize(vertLightDir);

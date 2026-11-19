@@ -6,12 +6,15 @@ in vec3 vertPosWorld;
 in vec3 vertPosView;
 in vec2 vertTexCoord;
 in vec3 vertNormal;
+in vec3 vertTangent;
+in vec3 vertBitangent;
 in vec3 vertLightDir;
 in float vertDepth;
 
 uniform sampler2D textureColor;
 uniform sampler2D textureNormal;
 uniform vec3 uLightPos;
+uniform bool uHasNormalMap;
 
 // Mód vizualizace:
 //  0 = výsledná barva (texture, bez osvětlení)
@@ -22,7 +25,8 @@ uniform vec3 uLightPos;
 //  5 = normála (world space)
 //  6 = UV souřadnice
 //  7 = vzdálenost od zdroje světla
-//  8 = texture normal (z normal mapy)
+//  8 = normal mapa (raw RGB), 9 = tangenta, 10 = bitangenta,
+//  11 = normal map normal (world space)
 uniform int uDebugMode;
 
 out vec4 outColor;
@@ -84,9 +88,32 @@ void main() {
         }
 
         case 8: {
-            // Normála z normal mapy (tangent space, surová hodnota)
-            vec3 sampledNormal = texture(textureNormal, vertTexCoord).rgb;
+            vec3 sampledNormal = uHasNormalMap
+                    ? texture(textureNormal, vertTexCoord).rgb
+                    : vec3(0.5, 0.5, 1.0);
             outColor = vec4(sampledNormal, 1.0);
+            break;
+        }
+
+        case 9: {
+            outColor = vec4(normalize(vertTangent) * 0.5 + 0.5, 1.0);
+            break;
+        }
+
+        case 10: {
+            outColor = vec4(normalize(vertBitangent) * 0.5 + 0.5, 1.0);
+            break;
+        }
+
+        case 11: {
+            vec3 N = normalize(vertNormal);
+            if (uHasNormalMap) {
+                vec3 tangentNormal = texture(textureNormal, vertTexCoord).rgb * 2.0 - 1.0;
+                vec3 T = normalize(vertTangent - N * dot(N, vertTangent));
+                vec3 B = normalize(cross(N, T));
+                N = normalize(mat3(T, B, N) * tangentNormal);
+            }
+            outColor = vec4(N * 0.5 + 0.5, 1.0);
             break;
         }
 

@@ -64,21 +64,31 @@ public class ObjLoader {
                     Vertex v1 = new Vertex(
                             positions.get(Integer.parseInt(v1Indices[0]) - 1),
                             uvs.get(Integer.parseInt(v1Indices[1]) - 1),
-                            normals.get(Integer.parseInt(v1Indices[2]) - 1)
+                            normals.get(Integer.parseInt(v1Indices[2]) - 1),
+                            null
                     );
 
                     Vertex v2 = new Vertex(
                             positions.get(Integer.parseInt(v2Indices[0]) - 1),
                             uvs.get(Integer.parseInt(v2Indices[1]) - 1),
-                            normals.get(Integer.parseInt(v2Indices[2]) - 1)
+                            normals.get(Integer.parseInt(v2Indices[2]) - 1),
+                            null
                     );
 
                     Vertex v3 = new Vertex(
                             positions.get(Integer.parseInt(v3Indices[0]) - 1),
                             uvs.get(Integer.parseInt(v3Indices[1]) - 1),
-                            normals.get(Integer.parseInt(v3Indices[2]) - 1)
+                            normals.get(Integer.parseInt(v3Indices[2]) - 1),
+                            null
                     );
 
+                    Vec3D tangent = calculateTangent(v1, v2, v3);
+                    v1 = new Vertex(v1.getPosition(), v1.getUv(), v1.getNormal(),
+                            orthogonalizeTangent(tangent, v1.getNormal()));
+                    v2 = new Vertex(v2.getPosition(), v2.getUv(), v2.getNormal(),
+                            orthogonalizeTangent(tangent, v2.getNormal()));
+                    v3 = new Vertex(v3.getPosition(), v3.getUv(), v3.getNormal(),
+                            orthogonalizeTangent(tangent, v3.getNormal()));
                     vertices.add(v1);
                     vertices.add(v2);
                     vertices.add(v3);
@@ -88,7 +98,7 @@ public class ObjLoader {
             throw new RuntimeException(e);
         }
 
-        float[] vb = new float[vertices.size() * 8];
+        float[] vb = new float[vertices.size() * 11];
         int[] ib = new int[vertices.size()];
 
         // Pozor: nyní si tohle můžeme dovolit, protože máme jednoduché trojúhelníky, které jdou za sebou
@@ -108,19 +118,51 @@ public class ObjLoader {
             vb[index++] = (float)v.getNormal().getX();
             vb[index++] = (float)v.getNormal().getY();
             vb[index++] = (float)v.getNormal().getZ();
-
-            // TODO: spočítat tangentu
+            vb[index++] = (float)v.getTangent().getX();
+            vb[index++] = (float)v.getTangent().getY();
+            vb[index++] = (float)v.getTangent().getZ();
         }
 
 
         OGLBuffers.Attrib[] attribs = {
                 new OGLBuffers.Attrib("inPosition", 3),
                 new OGLBuffers.Attrib("inTexCoord", 2),
-                new OGLBuffers.Attrib("inNormal", 3)
-                // TODO: přidat inTangent
+                new OGLBuffers.Attrib("inNormal", 3),
+                new OGLBuffers.Attrib("inTangent", 3)
         };
 
 
         return new OGLBuffers(vb, attribs, ib);
+    }
+
+    private static Vec3D calculateTangent(Vertex v1, Vertex v2, Vertex v3) {
+        Vec3D edge1 = v2.getPosition().sub(v1.getPosition());
+        Vec3D edge2 = v3.getPosition().sub(v1.getPosition());
+        double deltaU1 = v2.getUv().getX() - v1.getUv().getX();
+        double deltaV1 = v2.getUv().getY() - v1.getUv().getY();
+        double deltaU2 = v3.getUv().getX() - v1.getUv().getX();
+        double deltaV2 = v3.getUv().getY() - v1.getUv().getY();
+        double determinant = deltaU1 * deltaV2 - deltaU2 * deltaV1;
+
+        if (Math.abs(determinant) < 1e-8) {
+            return fallbackTangent(v1.getNormal());
+        }
+
+        return edge1.mul(deltaV2).sub(edge2.mul(deltaV1)).mul(1.0 / determinant);
+    }
+
+    private static Vec3D orthogonalizeTangent(Vec3D tangent, Vec3D normal) {
+        Vec3D normalizedNormal = normal.normalized().orElse(new Vec3D(0, 0, 1));
+        Vec3D orthogonalTangent = tangent.sub(normalizedNormal.mul(tangent.dot(normalizedNormal)));
+        return orthogonalTangent.normalized().orElse(fallbackTangent(normalizedNormal));
+    }
+
+    private static Vec3D fallbackTangent(Vec3D normal) {
+        Vec3D normalizedNormal = normal.normalized().orElse(new Vec3D(0, 0, 1));
+        Vec3D axis = Math.abs(normalizedNormal.getX()) < 0.9
+                ? new Vec3D(1, 0, 0)
+                : new Vec3D(0, 1, 0);
+        Vec3D tangent = axis.sub(normalizedNormal.mul(axis.dot(normalizedNormal)));
+        return tangent.normalized().orElse(new Vec3D(1, 0, 0));
     }
 }
