@@ -4,6 +4,7 @@ import app.objLoader.ObjLoader;
 import app.object.Axis;
 import app.object.Quad;
 import app.object.SceneObject;
+import app.object.Sphere;
 import lwjglutils.*;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFWCursorPosCallback;
@@ -29,12 +30,13 @@ import static org.lwjgl.opengl.GL30C.glBindFramebuffer;
 public class RendererColorPicking extends AbstractRenderer {
 
     // ======== Shadery ========
-    private int shaderProgramPhong, shaderProgramAxis, shaderProgramColorPicking, shaderProgramDebug;
+    private int shaderProgramPhong, shaderProgramAxis, shaderProgramColorPicking, shaderProgramDebug, shaderProgramLight;
 
     // ======== Scéna ========
     private Axis axisObject;
     private final List<SceneObject> sceneObjects = new ArrayList<>();
     private SceneObject selectedObject = null;
+    private Sphere lightSource;
 
     // ======== Kamera ========
     private Camera camera;
@@ -104,6 +106,7 @@ public class RendererColorPicking extends AbstractRenderer {
 
         // ======== Osy ========
         axisObject = new Axis();
+        lightSource = new Sphere(24, 32);
 
         // ======== Floor (Quad) – ID 1 ========
         SceneObject floor = new Quad(1);
@@ -134,6 +137,7 @@ public class RendererColorPicking extends AbstractRenderer {
         shaderProgramAxis         = ShaderUtils.loadProgram("/axis");
         shaderProgramColorPicking = ShaderUtils.loadProgram("/colorPicking");
         shaderProgramDebug        = ShaderUtils.loadProgram("/debug");
+        shaderProgramLight        = ShaderUtils.loadProgram("/light");
 
         printHelp();
     }
@@ -216,6 +220,8 @@ public class RendererColorPicking extends AbstractRenderer {
             bindTextures(shaderProgramPhong, obj);
             obj.getBuffers().draw(GL_TRIANGLES, shaderProgramPhong);
         }
+
+        renderLightSource();
     }
 
     // ================================================================
@@ -241,6 +247,18 @@ public class RendererColorPicking extends AbstractRenderer {
             bindTextures(shaderProgramDebug, obj);
             obj.getBuffers().draw(GL_TRIANGLES, shaderProgramDebug);
         }
+
+        renderLightSource();
+    }
+
+    private void renderLightSource() {
+        glUseProgram(shaderProgramLight);
+        setGlobalUniforms(shaderProgramLight);
+        Mat4 model = new Mat4Scale(0.12).mul(new Mat4Transl(lightPos));
+        glUniformMatrix4fv(
+                glGetUniformLocation(shaderProgramLight, "uModel"),
+                false, model.floatArray());
+        lightSource.getBuffers().draw(GL_TRIANGLES, shaderProgramLight);
     }
 
     // ================================================================
