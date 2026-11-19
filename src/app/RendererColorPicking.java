@@ -13,8 +13,10 @@ import transforms.*;
 
 import java.io.IOException;
 import java.nio.DoubleBuffer;
+import java.util.HashSet;
+import java.util.Set;
 
-import static org.lwjgl.glfw.GLFW.glfwGetCursorPos;
+import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30C.GL_FRAMEBUFFER;
@@ -33,6 +35,10 @@ public class RendererColorPicking extends AbstractRenderer {
 
     private OGLRenderTarget renderTarget;
     private OGLTexture2D.Viewer viewer;
+
+    // ======== WASD – sledované klávesy ========
+    private final Set<Integer> pressedKeys = new HashSet<>();
+    private static final double MOVE_SPEED = 0.05;
 
     public void init() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -55,8 +61,6 @@ public class RendererColorPicking extends AbstractRenderer {
         try {
             textureColor = new OGLTexture2D("./textures/brickwall.jpg");
             textureNormal = new OGLTexture2D("./textures/brickwall_normal.jpg");
-//            textureColor = new OGLTexture2D("./textures/bricksa.jpg");
-//            textureNormal = new OGLTexture2D("./textures/bricksn.png");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -70,46 +74,47 @@ public class RendererColorPicking extends AbstractRenderer {
         shaderProgramPhong = ShaderUtils.loadProgram("/phong");
         shaderProgramAxis = ShaderUtils.loadProgram("/axis");
         shaderProgramColorPicking = ShaderUtils.loadProgram("/colorPicking");
-        // TODO: shaderový program, který obarvuje ID barvou
-
-        // Tady říkáme, že chceme použít konkrétní shaderový program
-        //glUseProgram(shaderProgram);
-        // Textury je nutné bindovat
-        //texture.bind(shaderProgram, "textureWood");
     }
 
     public void display() {
+        // ======== WASD pohyb kamery (zpracování stisknutých kláves) ========
+        if (pressedKeys.contains(GLFW_KEY_W)) camera = camera.forward(MOVE_SPEED);
+        if (pressedKeys.contains(GLFW_KEY_S)) camera = camera.backward(MOVE_SPEED);
+        if (pressedKeys.contains(GLFW_KEY_A)) camera = camera.left(MOVE_SPEED);
+        if (pressedKeys.contains(GLFW_KEY_D)) camera = camera.right(MOVE_SPEED);
+
         glEnable(GL_DEPTH_TEST);
 
-        // TODO: Vykreslit scénu do textury
-        // TODO: shaderovým program, který obarvuje ID barvou
+        // ======== 1. průchod: renderovat scénu do textury (color picking) ========
+        // Osy se do picking bufferu NEKRESLI – nechceme je vybírat myší
         renderTarget.bind();
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        renderScene(shaderProgramColorPicking);
+        renderScene(shaderProgramColorPicking, false);
 
-        // Kresli na obrazovku
-        // TODO: tady už renderuju phongem
+        // ======== 2. průchod: renderovat na obrazovku (Phong) ========
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        renderScene(shaderProgramPhong);
+        renderScene(shaderProgramPhong, true);
 
         glDisable(GL_DEPTH_TEST);
         viewer.view(renderTarget.getColorTexture(), -1, -1, 0.5);
     }
 
-    private void renderScene(int shaderProgram) {
-        // ======== Render Axis ========
-        // TODO: axis nechceme renderovat do textury (nejdou myší vybrat)
-        {
+    /**
+     * @param shaderProgram  shader pro vykreslení objektů
+     * @param drawAxis       true = kreslit i osy (pouze pro finální průchod, ne pro color picking)
+     */
+    private void renderScene(int shaderProgram, boolean drawAxis) {
+        // ======== Render Axis (jen do finálního průchodu, ne do picking bufferu) ========
+        if (drawAxis) {
             glUseProgram(shaderProgramAxis);
             setGlobalUniforms(shaderProgramAxis);
             buffersAxis.draw(GL_LINES, shaderProgramAxis);
         }
 
         // ======== Render Floor ========
-        // TODO: do shaderu, který vykresluje do textury, musíme přidat ID (barva)
         {
             glUseProgram(shaderProgram);
             setGlobalUniforms(shaderProgram);
@@ -136,10 +141,8 @@ public class RendererColorPicking extends AbstractRenderer {
     }
 
     private void setGlobalUniforms(int shaderProgram) {
-        // View matice - posíláme do shaderu jako uniform
         int locUView = glGetUniformLocation(shaderProgram, "uView");
         glUniformMatrix4fv(locUView, false, camera.getViewMatrix().floatArray());
-        // Proj matice - posíláme do shaderu jako uniform
         int locUProj = glGetUniformLocation(shaderProgram, "uProj");
         glUniformMatrix4fv(locUProj, false, proj.floatArray());
     }
@@ -148,36 +151,47 @@ public class RendererColorPicking extends AbstractRenderer {
     private GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
         @Override
         public void invoke(long window, int key, int scancode, int action, int mods) {
+            // Zavřít okno na Escape
+            if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
+                glfwSetWindowShouldClose(window, true);
+            }
+
+            // Sledujeme stisknuté/uvolněné klávesy pro plynulý pohyb
+            if (action == GLFW_PRESS) {
+                pressedKeys.add(key);
+            } else if (action == GLFW_RELEASE) {
+                pressedKeys.remove(key);
+            }
         }
     };
 
     private GLFWMouseButtonCallback mbCallback = new GLFWMouseButtonCallback() {
         @Override
         public void invoke(long window, int button, int action, int mods) {
-            if (button == 0) {
-                mousePressed = action == 1;
+            if (button == GLFW_MOUSE_BUTTON_LEFT) {
+                mousePressed = action == GLFW_PRESS;
             }
 
-            DoubleBuffer xBuffer = BufferUtils.createDoubleBuffer(1);
-            DoubleBuffer yBuffer = BufferUtils.createDoubleBuffer(1);
-            glfwGetCursorPos(window, xBuffer, yBuffer);
-            double x = xBuffer.get(0);
-            double y = yBuffer.get(0);
+            // Color picking – výběr objektu kliknutím
+            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+                DoubleBuffer xBuffer = BufferUtils.createDoubleBuffer(1);
+                DoubleBuffer yBuffer = BufferUtils.createDoubleBuffer(1);
+                glfwGetCursorPos(window, xBuffer, yBuffer);
+                double x = xBuffer.get(0);
+                double y = yBuffer.get(0);
 
-            OGLTexImageFloat image = renderTarget.getColorTexture().getTexImage(new OGLTexImageFloat.Format(4));
-            System.out.println("x: " + x);
-            System.out.println("y: " + y);
+                OGLTexImageFloat image = renderTarget.getColorTexture().getTexImage(new OGLTexImageFloat.Format(4));
+                int texY = renderTarget.getHeight() - (int) Math.round(y) - 1;
+                float id = image.getPixel((int) Math.round(x), texY, 0) * 255;
 
-            int texY = renderTarget.getHeight() - (int)Math.round(y) - 1;
-            float id = image.getPixel((int)Math.round(x), texY, 0) * 255;
-            System.out.println("id: " + id);
-            if((int)Math.round(id) == 30)
-                System.out.println("Floor");
-            else if((int)Math.round(id) == 70)
-                System.out.println("Dragon");
-            else
-                System.out.println("Nic nevybráno");
-
+                System.out.println("Color picking – klik na [" + (int)x + ", " + (int)y + "], ID: " + (int)Math.round(id));
+                if ((int) Math.round(id) == 30)
+                    System.out.println("  → Vybráno: Floor");
+                else if ((int) Math.round(id) == 70)
+                    System.out.println("  → Vybráno: Dragon");
+                else
+                    System.out.println("  → Nic nevybráno");
+            }
         }
     };
 
@@ -219,6 +233,4 @@ public class RendererColorPicking extends AbstractRenderer {
     public GLFWScrollCallback getScrollCallback() {
         return scrollCallback;
     }
-
-
 }
