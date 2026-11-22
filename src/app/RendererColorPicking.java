@@ -2,6 +2,7 @@ package app;
 
 import app.objLoader.ObjLoader;
 import app.object.Axis;
+import app.object.Pyramid;
 import app.object.Quad;
 import app.object.SceneObject;
 import app.object.Sphere;
@@ -117,24 +118,24 @@ public class RendererColorPicking extends AbstractRenderer {
         floor.setTextureColor(texBrickColor);
         floor.setTextureNormal(texBrickNormal);
         floor.rotate(Math.toRadians(-90), 0, 0);
-        floor.translate(0, -0.5, 0);
+        floor.translate(0, -0.36, 0);
         sceneObjects.add(floor);
 
         // ======== Dragon (OBJ) – ID 2 ========
         SceneObject dragon = new SceneObject(2);
-        dragon.setBuffers(ObjLoader.load("./obj/dragon.obj"));
+        dragon.setBuffers(ObjLoader.load("./obj/Shrimp-bl.obj"));
         dragon.setTextureColor(texWood);
-        dragon.scaleBy(0.05);
+        dragon.scaleBy(0.4);
         dragon.rotate(Math.toRadians(90), 0, Math.toRadians(90));
         dragon.translate(-0.25, 0, 0);
         sceneObjects.add(dragon);
 
-        // ======== Druhý Quad – ID 3 ========
-        SceneObject wall = new Quad(3);
-        wall.setTextureColor(texBrickColor);
-        wall.setTextureNormal(texBrickNormal);
-        wall.translate(2, 0.5, 0);
-        sceneObjects.add(wall);
+        // ======== Pyramid (ID 3) ========
+        SceneObject pyramid = new Pyramid(3);
+        pyramid.setTextureColor(texWood);
+        pyramid.scaleBy(0.7);
+        pyramid.translate(0.45, -0.36, -0.4);
+        sceneObjects.add(pyramid);
 
         // ======== Shadery ========
         shaderProgramPhong        = ShaderUtils.loadProgram("/phong");
